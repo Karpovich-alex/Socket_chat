@@ -1,5 +1,5 @@
 import socket
-
+#todo: принимать сообщения сервер
 sock=socket.socket()
 sock.connect(("192.168.0.136", 10001))
 # sock=socket.create_connection(("127.0.0.1", 10001))
