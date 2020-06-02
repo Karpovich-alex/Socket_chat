@@ -1,7 +1,7 @@
 import socket
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.bind(("192.168.0.136", 10001))
+sock.bind(("127.0.0.1", 10001))
 sock.listen(socket.SOMAXCONN)
 #todo: asyncio
 #todo: connection with client
@@ -9,8 +9,10 @@ sock.listen(socket.SOMAXCONN)
 #todo: message types
 #todo: commands
 #todo: raspberry?)
+#todo: save logins
 conn, addr = sock.accept()
-print(addr[0])
+# conn.settimeout(1)#timeout for connection
+print('Conected client:', addr)
 memory = dict()
 
 
@@ -19,7 +21,7 @@ def check_name(text, addr):
     port = addr[1]
     # sock.send(ip, "Добро пожаловать на супер чат! введите имя через 'name:'".encode('utf8'))
     a = 'Hello'
-    socket.create_connection((ip, 10001)).send(a.encode("utf8"))
+    socket.create_connection((ip, 10001),5).send(a.encode("utf8"))
     if text[:5] == 'name:':
         memory[ip] = text[5:].strip()
     else:
@@ -30,7 +32,11 @@ def check_name(text, addr):
 
 
 while True:
-    data = conn.recv(1024)
+    try:
+        data = conn.recv(1024)
+    except socket.timeout:
+        print('close connection')
+        break
 
     if not data:
         break
