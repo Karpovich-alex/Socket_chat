@@ -8,7 +8,7 @@ server_adress=("127.0.0.1", 10001)
 
 def main():
     try:
-        sock = socket.create_connection(server_adress, 5,)
+        sock = socket.create_connection(server_adress)
         print('Your ip: {}'.format(sock.getsockname()))
     except socket.timeout:
         exit('Server not found')
@@ -23,9 +23,14 @@ def print_th(text):
         print(text)
 
 
-def receive_msg(sock):
-   data=sock.recv(1024)
-   print(data.decode('utf8'))
+def receive_msg(sock:socket.socket):
+    while sock:
+        try:
+            data=sock.recv(1024)
+        except ConnectionAbortedError:
+            break
+        if data:
+            print(data.decode('utf8'))
 
 
 def _process_request(conn, addr):
