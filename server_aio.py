@@ -9,14 +9,12 @@ from typing import Tuple, Dict
 # todo: commands
 
 
-# conn.settimeout(1)#timeout for connection
-
-
 class Chat_server():
     def __init__(self, ip, port):
         self._ip_server = ip
         self._port_server = port
         self._users_arr: Dict = dict()
+        # todo: make database for users
 
     @staticmethod
     def print_th(text):
@@ -26,6 +24,9 @@ class Chat_server():
         self._users_arr[addr] = {'name': addr}
         self._users_arr[addr] = {'reader': r}
         self._users_arr[addr] = {'writer': w}
+
+    def _del_user(self, addr):
+        del self._users_arr[addr]
 
     async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         # data = await reader.read(1024)
@@ -44,14 +45,17 @@ class Chat_server():
                 data = await reader.read(1024)
             except ConnectionResetError:
                 self.print_th(f'User {addr} exit')
+                await self._loop.run_in_executor(None, self._del_user, addr)
                 writer.close()
                 break
             except asyncio.TimeoutError as error:
                 print(f'{addr}: WEBSOCKET_TIMEOUT: {error}')
                 writer.close()
                 break
+            # todo: more exceptions
             if data:
                 message = data.decode()
+                # todo: Make commands_from_user_handler
                 if message == '/i':
                     print(self._users_arr)
                 print("{} >> {}".format(addr, message))
@@ -71,6 +75,7 @@ class Chat_server():
         while True:
             message = await self._loop.run_in_executor(None, input)
             print('Got from concole: {}'.format(message))
+            # todo: Make commands & commands_handler
 
     def start(self):
         self._loop = asyncio.get_event_loop()
