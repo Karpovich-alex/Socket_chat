@@ -4,7 +4,8 @@ import os
 
 # todo: принимать сообщения сервер
 p_lock = threading.RLock()
-server_adress=("127.0.0.1", 10001)
+server_adress = ("127.0.0.1", 10001)
+
 
 def main():
     try:
@@ -12,8 +13,8 @@ def main():
         print('Your ip: {}'.format(sock.getsockname()))
     except socket.timeout:
         exit('Server not found')
-    th_send_m = threading.Thread(target=send_msg, args=(sock,), name='TH_sendmsg')
-    th_recieve_m = threading.Thread(target=receive_msg, args=(sock,), name='TH_rec_m')
+    th_send_m = threading.Thread(target=send_msg, args=(sock,), name='TH_send_msg')
+    th_recieve_m = threading.Thread(target=receive_msg, args=(sock,), name='TH_rec_msg')
     th_send_m.start()
     th_recieve_m.start()
 
@@ -23,10 +24,10 @@ def print_th(text):
         print(text)
 
 
-def receive_msg(sock:socket.socket):
+def receive_msg(sock: socket.socket):
     while sock:
         try:
-            data=sock.recv(1024)
+            data = sock.recv(1024)
         except ConnectionAbortedError:
             break
         if data:
