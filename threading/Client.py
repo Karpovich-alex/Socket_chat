@@ -61,10 +61,10 @@ def send_msg(sock):
             print("send data error:", ex)
             break
         text = str(input())
-    else:
-        sock.send(text.encode("utf8"))
-        sock.close()
-        exit()
+
+    sock.send(text.encode("utf8"))
+    sock.close()
+    exit()
 
 
 if __name__ == '__main__':
