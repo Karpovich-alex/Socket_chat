@@ -11,8 +11,11 @@ def main():
     try:
         sock = socket.create_connection(server_adress)
         print('Your ip: {}'.format(sock.getsockname()))
-    except socket.timeout:
+    except socket.timeout or ConnectionRefusedError:
         exit('Server not found')
+    except socket.error as ex:
+        exit(f'Got unexpected error: {ex}')
+
     th_send_m = threading.Thread(target=send_msg, args=(sock,), name='TH_send_msg')
     th_recieve_m = threading.Thread(target=receive_msg, args=(sock,), name='TH_rec_msg')
     th_send_m.start()
@@ -30,8 +33,16 @@ def receive_msg(sock: socket.socket):
             data = sock.recv(1024)
         except ConnectionAbortedError:
             break
+        except ConnectionResetError:
+            print('Server disconnected')
+            break
+        except socket.error as ex:
+            print("send data error:", ex)
+            break
         if data:
             print(data.decode('utf8'))
+    sock.close()
+    exit()
 
 
 def _process_request(conn, addr):
@@ -61,8 +72,12 @@ def send_msg(sock):
             print("send data error:", ex)
             break
         text = str(input())
-
-    sock.send(text.encode("utf8"))
+    try:
+        sock.send(text.encode("utf8"))
+    except ConnectionResetError:
+        print('Server disconnected')
+    except socket.error as ex:
+        print("send data error:", ex)
     sock.close()
     exit()
 
