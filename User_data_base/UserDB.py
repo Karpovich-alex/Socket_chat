@@ -20,11 +20,12 @@ class UserDB:
 
     def info_users(self):
         msg = 'Now {} users connected:\n'.format(self._count_users)
-        msg += '\n'.join(map(lambda x: str(f"{x.addr} named: {x.name}"), self))
+        msg += '\n'.join(map(lambda x: str(f"\t h: {hash(x)} named: {x.name}"), self))
         return msg
 
     def del_user(self, addr):
         del self._users_arr[addr]
+        self._count_users -= 1
 
     def get_user(self, addr) -> User:
         return self._users_arr[addr]

@@ -9,6 +9,7 @@ server_adress = ("127.0.0.1", 10001)
 
 def main():
     try:
+        print(f'Try to connect : {server_adress}')
         sock = socket.create_connection(server_adress)
         print('Your ip: {}'.format(sock.getsockname()))
     except socket.timeout or ConnectionRefusedError:

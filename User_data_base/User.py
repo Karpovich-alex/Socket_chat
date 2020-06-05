@@ -5,4 +5,7 @@ class User:
         self._port = addr[1]
         self.reader = reader
         self.writer = writer
-        self.name = f'{self._ip} {self._port}'
+        self.name = hash(f'{self._ip} {self._port}')
+
+    def __hash__(self):
+        return hash(f'{self._ip} {self._port}')
