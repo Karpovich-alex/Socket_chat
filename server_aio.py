@@ -57,6 +57,8 @@ class Chat_server():
     async def _exit_user(self, addr, *args):
         user = self._user_db.get_user(addr)
         writer: asyncio.StreamWriter = user.writer
+        reader: asyncio.StreamReader = user.reader
+        # todo: fix exit
         writer.close()
         await self._loop.run_in_executor(None, self._user_db.del_user, addr)
         await self.send_msg(f"User {user.name} exit")
@@ -69,23 +71,25 @@ class Chat_server():
             try:
                 data = await reader.read(1024)
             except ConnectionResetError as error:
-                logger.error(f'{addr}: WEBSOCKET_CONNECTION_ERROR: {error}')
-                await self._exit_user(addr)
+                # logger.error(f'{addr}: WEBSOCKET_CONNECTION_ERROR: {error}')
                 break
             except asyncio.TimeoutError as error:
                 logger.error(f'{addr}: WEBSOCKET_TIMEOUT: {error}')
-                writer.close()
                 break
             except BaseException as ex:
                 logger.critical("Uncaught exception: %s", ex)
+                break
+            if addr not in self._user_db.get_all_users():
+                break
             if data:
                 message = data.decode()
-
                 logger.info("{} >> {}".format(addr, message))
                 if message[0] == '/':
                     await self._user_commands_handler(message, addr)
                 else:
                     await self.send_msg(message, from_user=addr)
+        if addr in self._user_db.get_all_users():
+            await self._exit_user(addr)
 
     async def _handle_new_connection(self, addr, reader, writer):
         logger.info(f"User {addr} has connected")
@@ -102,7 +106,7 @@ class Chat_server():
             await com(addr, *commands[1:])
         else:
             await self.send_msg('Unsupported command', to_user=addr)
-
+    # todo: ???
     async def _disconnect_user(self, addr):
         writer: asyncio.StreamWriter = self._user_db.get_writer(addr)
         writer.close()
@@ -135,8 +139,8 @@ class Chat_server():
             writer.write(f_msg.encode())
             await writer.drain()
         except ConnectionResetError as ex:
-            logger.error("Got error: %s", traceback.format_exc())
-            await self._disconnect_user(to_user)
+            logger.info("User has lost connection: %s", ex)
+            await self._exit_user(to_user)
 
     async def input_consule(self):
         while True:
