@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Tuple
 from User_data_base.User import User
 from asyncio import StreamWriter, StreamReader
 
@@ -23,7 +23,7 @@ class UserDB:
         msg += '\n'.join(map(lambda x: str(f"\t h: {hash(x)} named: {x.name}"), self))
         return msg
 
-    def del_user(self, addr):
+    def del_user(self, addr:Tuple[str,int]):
         del self._users_arr[addr]
         self._count_users -= 1
 

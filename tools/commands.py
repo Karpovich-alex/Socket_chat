@@ -62,6 +62,9 @@ class CommandARCH:
             out_dict.update(com.completer())
         return arr, out_dict
 
+    def __contains__(self, com):
+        return com in self._allcom_db.keys()
+
     def get_com(self, com):
         return self._allcom_db[com]
 
