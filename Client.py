@@ -3,19 +3,21 @@ import threading
 import asyncio
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
-from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.completion import PathCompleter, NestedCompleter
+from tools.Completer import NestedCompleter
 from prompt_toolkit.lexers import RegexSync
 # from prompt_toolkit.shortcuts import ProgressBar
 from contextlib import closing
 from tools.commands import CommandARCH, Command
 from Load_bar import ProgressBar, ProgressBarOrganaser
 import re
-import tracemalloc
+import traceback
 import time
 import pickle
 import cv2
 import numpy
 import os
+import sys
 
 # todo: принимать сообщения сервер
 p_lock = threading.RLock()
@@ -34,7 +36,6 @@ class Client:
         # Info about file server acceptor
         self._server_port_file = 0
         self._server_ip_file = self._server_ip
-        self._file_sock = 0
         self._progress = ProgressBarOrganaser()
 
     def start(self):
@@ -65,15 +66,21 @@ class Client:
                 Command('info', '/i', description="View info", scope='Server'))
             self._commands.add_commands(
                 Command('name', '/n', description="Change your name", scope='Server'))
-            self._commands.add_commands(Command('send file', '/f', self._send_file, description="Send file"))
+            self._commands.add_commands(Command('send file', '/f', self._send_file, description="Send file",
+                                                sub_command=(Command('image', '/img'),
+                                                             Command('film', '/film'),
+                                                             Command('document', '/doc'),
+                                                             Command('other', '/other')), completer=PathCompleter()))
             self._commands.add_commands(
-                Command('download file', '/d', self._recv_file, description="Download last file"))
+                Command('download file', '/d', self._recv_file_1, description="Download last file"
+                        ))
             self._commands.add_commands(Command('test', '/t', self._test))
-        arr, d_comp = self._commands.get_completer()
+        d_comp = self._commands.get_completer()
         # todo: AUTO tab
-        self._prompt_completer = WordCompleter(arr, meta_dict=d_comp)  # pattern=re.compile(r"(\/\w+)")
+        self._prompt_completer, m_dist = NestedCompleter.from_nested_dict(d_comp)  # pattern=re.compile(r"(\/\w+)")
+        self._prompt_completer(m_dist)
 
-    def _com_help(self, *args):
+    async def _com_help(self, *args):
         print(self._commands.info)
 
     async def _test(self, *args):
@@ -84,59 +91,135 @@ class Client:
     async def _req_load(self, *args):
         await self._send_msg('/d'.encode('utf8'))
 
-    async def _recv_file(self, *args, c_bits=4096):
-        self._file_sock = socket.create_connection((self._server_ip, self._server_port_file))
-        self._file_sock.sendall(f'/d {self.__ip} {self.__port}'.encode())
-        data = self._file_sock.recv(c_bits).decode()
+    async def _recv_file_1(self, *args, c_bits=4096):
+        reader, writer = await asyncio.open_connection(host=self._server_ip_file, port=self._server_port_file)
+        writer.write(f'/d {self.__ip} {self.__port}'.encode())
+        await writer.drain()
+        data = await reader.read(c_bits)
+        data = data.decode()
+        print(data)
         f_type, f_size, file_name = data.split()
         f_size = int(f_size)
-        print(f'Download {file_name} type: {f_type} size: {f_size} b')
-        try:
-            with open(buffer + file_name, 'wb') as f:
-                try:
-                    downloaded_size = 0
-                    loadbar = self._progress.new_bar(file_name, f_size, 'Downloading', p=False)
-                    data = self._file_sock.recv(c_bits)
-                    while downloaded_size < f_size and data:
+        while True:
+            try:
+                with open(buffer + file_name, 'wb') as f:
+                    download = 0
+                    loadbar = self._progress.new_bar(file_name, f_size, 'Download')
+                    data = await reader.read(c_bits)
+                    while data and download < f_size:
                         f.write(data)
-                        downloaded_size += len(data)
-                        loadbar(downloaded_size)
-                        if downloaded_size < f_size:
-                            data = self._file_sock.recv(c_bits)
-                except socket.timeout:
-                    print("send data timeout")
-                    self.close_con()
-                except socket.error as ex:
-                    print("send data error:", ex)
+                        download += c_bits
+                        loadbar(download)
+                        print(download)
+                        data = await reader.read(c_bits)
+            except socket.timeout:
+                print("send data timeout")
+                break
+            except socket.error as ex:
+                print("send data error:", ex)
+                break
+            except Exception:
+                # Get the traceback object
+                tb = sys.exc_info()[2]
+                tbinfo = traceback.format_tb(tb)[0]
+                # Concatenate information together concerning the error into a message string
+                pymsg = "PYTHON ERRORS:\nTraceback info:\n" + tbinfo + "\nError Info:\n" + str(sys.exc_info()[1])
+        writer.close()
 
-        except BaseException as ex:
-            print(f"Got unexcepted error: {ex}")
+    async def _recv_file(self, *args, c_bits=4096):
+        reader, writer = await asyncio.open_connection(host=self._server_ip_file, port=self._server_port_file)
+        writer.write(f'/d {self.__ip} {self.__port}'.encode())
+        await writer.drain()
+        while True:
+            try:
+                data = await reader.read(c_bits)
+                data = data.decode()
+                print('<<<<<<<<<<<', data)
+                f_type, f_size, file_name = data.split()
+                f_size = int(f_size)
+                print(f'Downloading: {file_name} type: {f_type} size: {f_size} b')
+                with open(buffer + file_name, 'wb') as f:
+                    try:
+                        loadbar = self._progress.new_bar(file_name, f_size, 'Downloading', p=False)
+                        downloaded_size = 0
+                        data = await reader.read(c_bits)
+                        print('H1')
+                        while downloaded_size < f_size and data:
+                            f.write(data)
+                            downloaded_size += len(data)
+                            loadbar(downloaded_size)
+                            if downloaded_size < f_size:
+                                data = await reader.read(c_bits)
+                                print('H100')
+                        # while downloaded_size < f_size:
+                        #     try:
+                        #         data = await reader.read(c_bits)
+                        #         print(data)
+                        #     except BaseException as ex:
+                        #         print('Got here: ', ex)
+                        #     if data:
+                        #         f.write(data)
+                        #         downloaded_size += len(data)
+                        #         loadbar(downloaded_size)
+                        #     else:
+                        #         break
+                        print('GOT!111')
+                    except socket.timeout:
+                        print("send data timeout")
+                        break
+                    except socket.error as ex:
+                        print("send data error:", ex)
+                        break
+                break
+            except UnicodeEncodeError:
+                print('Bad request')
+                break
+            except Exception:
+                print('This')
+        writer.close()
+        print('GOT')
 
     async def _send_file(self, *args, c_bits=4096):
-        if not args:
-            print('Please input path to file')
+        if not args or len(args[0].split()) != 2:
+            print('Please input path to file in format: /f /[type] file path')
         else:
-            self._file_sock = socket.create_connection((self._server_ip, self._server_port_file))
-            # self._file_sock = self._loop.open_connection(host=self._server_ip_file, port=self._server_port_file)
+            reader, writer = await asyncio.open_connection(host=self._server_ip_file, port=self._server_port_file)
             [msg] = args
             com = msg.split(' ', maxsplit=1)
             f_type = com[0]
             f_path: str = com[1]
             # todo: f_name
-            # f_name  =f_path.rfind('/')
+            f_name = (str(re.match(r"(.+\\)?(\w+.\w+)", f_path).group(2)))
             try:
                 f_size = os.path.getsize(f_path)
                 try:
-                    self._file_sock.send(f"/f {f_size} {f_type} {f_path} {self.__ip} {self.__port}".encode('utf-8'))
+                    writer.write(f"/f {f_size} {f_type} {f_name} {self.__ip} {self.__port}".encode('utf-8'))
+                    await writer.drain()
                 except socket.timeout:
                     print("send data timeout")
                     self.close_con()
                 except socket.error as ex:
                     print("send data error:", ex)
                 await asyncio.sleep(1)
-                # send_th = threading.Thread(target=self._send_file_thread, args=(f, c_bits, f_size, f_path), name='Send thread')
-                # await self._send_file_thread(f, c_bits, f_size, f_path)
-                self._loop.run_in_executor(None, self._send_file_thread, c_bits, f_size, f_path)
+                with open(f_path, 'rb') as f:
+                    loadbar = self._progress.new_bar(f_name, f_size, 'Uploading', p=False)
+                    loaded = 0
+                    line = f.read(c_bits)
+                    while line:
+                        loaded += c_bits
+                        loadbar(loaded)
+                        try:
+                            writer.write(line)
+                            await writer.drain()
+                        except socket.timeout:
+                            print("send data timeout")
+                            self.close_con()
+                        except socket.error as ex:
+                            print("send data error:", ex)
+                        except Exception:
+                            raise
+                        line = f.read(c_bits)
+                writer.close()
                 # send_th.start()
                 # with send_lock:
                 #     send_th.join()
@@ -144,27 +227,6 @@ class Client:
 
             except FileNotFoundError:
                 print('Cam\'t find file %s' % f_path)
-        self._file_sock.close()
-
-    def _send_file_thread(self, c_bits, f_size, f_path):
-        with open(f_path, 'rb') as f:
-            with send_lock:
-                print('Here')
-                loadbar = self._progress.new_bar(f_path, f_size, 'Uploading', p=False)
-                loaded = 0
-                line = f.read(c_bits)
-                while line:
-                    loaded += c_bits
-                    loadbar(loaded)
-                    try:
-                        self._file_sock.sendall(line)
-                    except socket.timeout:
-                        print("send data timeout")
-                        self.close_con()
-                    except socket.error as ex:
-                        print("send data error:", ex)
-                    line = f.read(c_bits)
-                print('There')
 
     def receive_msg(self):
         while True:
@@ -186,7 +248,7 @@ class Client:
                     elif 0:
                         pass
                         # if data.startswith('/') and data.find('>>') == -1:
-                        # self._thread_recv_file = threading.Thread(target=self._load_file, args=(data,),
+                        # self._thread_recv_file = Archive.Thread(target=self._load_file, args=(data,),
                         #                                       name='Receiving file')
                         # self._thread_recv_file.start()
                         # time.sleep(2)
@@ -202,7 +264,14 @@ class Client:
         if com[0] in self._commands:
             command = self._commands.get_com(com[0])
             if command.get_scope() == 'Client':
-                asyncio.create_task(command(*com[1:]))
+                try:
+                    asyncio.create_task(command(*com[1:]))
+                except Exception:
+                    # Get the traceback object
+                    tb = sys.exc_info()[2]
+                    tbinfo = traceback.format_tb(tb)[0]
+                    # Concatenate information together concerning the error into a message string
+                    pymsg = "PYTHON ERRORS:\nTraceback info:\n" + tbinfo + "\nError Info:\n" + str(sys.exc_info()[1])
                 # await asyncio.wait([command(*com[1:])])
                 # self._loop.run_in_executor(None, command, *com[1:])
             else:

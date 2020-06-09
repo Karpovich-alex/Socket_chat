@@ -1,7 +1,10 @@
 import socket
 import threading
-import os
-
+import sys
+from prompt_toolkit import prompt
+from prompt_toolkit import print_formatted_text
+from prompt_toolkit.formatted_text import FormattedText
+import asyncio
 # todo: принимать сообщения сервер
 p_lock = threading.RLock()
 server_adress = ("127.0.0.1", 10001)
@@ -25,7 +28,8 @@ def main():
 
 def print_th(text):
     with p_lock:
-        print(text)
+        print_formatted_text(FormattedText([
+    ('#ff0066 italic', text)]))
 
 
 def receive_msg(sock: socket.socket):
@@ -36,7 +40,8 @@ def receive_msg(sock: socket.socket):
             break
         except ConnectionResetError:
             print('Server disconnected')
-            break
+            sock.close()
+            exit()
         except socket.error as ex:
             print("send data error:", ex)
             break
@@ -63,8 +68,9 @@ def _process_request(conn, addr):
 
 
 def send_msg(sock):
-    text = str(input())
+    text = prompt('>',complete_in_thread=True,wrap_lines=False)
     while text != '/e':
+
         try:
             sock.send(text.encode("utf8"))
         except socket.timeout:
@@ -72,11 +78,13 @@ def send_msg(sock):
         except socket.error as ex:
             print("send data error:", ex)
             break
-        text = str(input())
+        text = prompt('>',complete_in_thread=True,wrap_lines=False)
     try:
         sock.send(text.encode("utf8"))
     except ConnectionResetError:
         print('Server disconnected')
+        sock.close()
+        exit()
     except socket.error as ex:
         print("send data error:", ex)
     sock.close()

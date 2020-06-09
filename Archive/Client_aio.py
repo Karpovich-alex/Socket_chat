@@ -3,6 +3,8 @@ import asyncio
 import os
 from concurrent.futures import FIRST_COMPLETED
 import traceback
+from prompt_toolkit import PromptSession
+from prompt_toolkit.patch_stdout import patch_stdout
 
 
 # todo: принимать сообщения сервер
@@ -25,9 +27,8 @@ class Client:
             future.cancel()
 
     async def _recieve_msg(self):
-        while True and not asyncio.tasks.Task.cancelled(self._writer.current_task()):
+        while True:
             try:
-                print(asyncio.current_task())
                 data = await self._reader.read(1024)
             except ConnectionResetError:
                 self.print_th(f'Server {self._addr} exit')
@@ -47,9 +48,16 @@ class Client:
                 message = data.decode()
                 self.print_th("received %r from %r" % (message, self._addr))
 
+    async def async_input(self):
+        session = PromptSession()
+        while True:
+            with patch_stdout():
+                result = await session.prompt_async('> ')
+
     async def _send_msg(self):
         while True:
             try:
+                # message = await self.async_input()
                 message = await self._loop.run_in_executor(None, input)
                 if message.lower() == '/e':
                     self._writer.close()
@@ -85,8 +93,8 @@ class Client:
             self._loop.run_until_complete(self._create_com())
         except ConnectionRefusedError as error:
             self.print_th(f': WEBSOCKET_TIMEOUT: {error}')
-        else:
-            self.print_th(f'Unexpected error: {traceback.format_exc()}')
+        except BaseException as ex:
+            self.print_th(f'Unexpected error: {ex}')
         finally:
             self._loop.close()
             self.print_th('Your connection is closed')
@@ -96,3 +104,4 @@ if __name__ == '__main__':
     server_adress = ("127.0.0.1", 10001)
     client = Client(server_adress)
     client.start()
+    exit()
