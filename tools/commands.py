@@ -52,7 +52,7 @@ class Command:
         return self._scope
 
     async def __call__(self, *args, **kwargs):
-        await self._do_com(*args, **kwargs)
+        return await self._do_com(*args, **kwargs)
 
 
 class CommandARCH:

@@ -80,7 +80,6 @@ class NestedCompleter(Completer):
             else:
                 assert value is None
                 options[key] = None
-        print(options)
         return cls(options), meta_dict
 
     def __call__(self, m_dict):

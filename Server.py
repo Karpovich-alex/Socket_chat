@@ -77,7 +77,7 @@ class Chat_server():
                     await self._r_send_msg(line, addr)
                     line = f.read(1024)
             await self.send_msg(f"file {file_name} has downloaded", to_user=addr)
-            logger.info(f"User {addr} received {file_name}")
+            logger.info(f"User {addr} received aaa {file_name}")
 
         else:
             await self.send_msg(f"Can't find last file", to_user=addr)
@@ -181,6 +181,7 @@ class Chat_server():
                         await self.send_msg("{} : File {} has downloaded".format('{}', file_name),
                                             m_type='notice', to_user=(client_ip, client_port))
                         logger.info(f"User ({client_ip}, {client_port}) received {file_name}")
+                        break
             except FileNotFoundError:
                 await self.send_msg("{} : Can't find file {}".format('{}', file_name), m_type='notice',
                                     to_user=(client_ip, client_port))
@@ -222,37 +223,31 @@ class Chat_server():
             writer.close()
 
     async def _handle_connection_file_server(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-        c_bits = 1024
+        c_bits = 4096
         try:
             data = await reader.read(c_bits)
         except ConnectionResetError:
             writer.close()
-        try:
-            data = data.decode()
-        except:
-            writer.write('Init error'.encode())
-            await writer.drain()
-            writer.close()
-        data = data.split()
-        if data:
+        while True:
+            try:
+                data = data.decode()
+                if not data:
+                    raise
+            except:
+                writer.write('Init error'.encode())
+                await writer.drain()
+                writer.close()
+                break
+            data = data.split()
             if data[0] == '/f':
-                await self._recv_file(reader, writer, data[1:])
+                await self._recv_file(reader, writer, data[1:], c_bits=c_bits)
             elif data[0] == '/d':
-                await self._send_file(reader, writer, data[1:])
+                await self._send_file(reader, writer, data[1:], c_bits=c_bits)
             else:
                 writer.write('Init error'.encode())
                 await writer.drain()
                 writer.close()
-        else:
-            writer.write('Init error'.encode())
-            await writer.drain()
-            writer.close()
-
-    # todo: ???
-    async def _disconnect_user(self, addr):
-        writer: asyncio.StreamWriter = self._user_db.get_writer(addr)
-        writer.close()
-        await self._u_exit(addr)
+            break
 
     async def send_msg(self, msg: str, from_user: Tuple[str, int] = ('Server', 0),
                        to_user: Tuple[str, int] = ('All', 0),

@@ -4,12 +4,13 @@ import asyncio
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.completion import PathCompleter, NestedCompleter
+from prompt_toolkit.history import InMemoryHistory
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from tools.Completer import NestedCompleter
-from prompt_toolkit.lexers import RegexSync
 # from prompt_toolkit.shortcuts import ProgressBar
 from contextlib import closing
 from tools.commands import CommandARCH, Command
-from Load_bar import ProgressBar, ProgressBarOrganaser
+from Load_bar import ProgressBarOrganiser
 import re
 import traceback
 import time
@@ -36,7 +37,7 @@ class Client:
         # Info about file server acceptor
         self._server_port_file = 0
         self._server_ip_file = self._server_ip
-        self._progress = ProgressBarOrganaser()
+        self._progress = ProgressBarOrganiser(length=20)
 
     def start(self):
         try:
@@ -70,11 +71,10 @@ class Client:
                                                 sub_command=(Command('image', '/img'),
                                                              Command('film', '/film'),
                                                              Command('document', '/doc'),
-                                                             Command('other', '/other')), completer=PathCompleter()))
+                                                             Command('other', '/other')),
+                                                completer=PathCompleter()))
             self._commands.add_commands(
-                Command('download file', '/d', self._recv_file_1, description="Download last file"
-                        ))
-            self._commands.add_commands(Command('test', '/t', self._test))
+                Command('download file', '/d', self._recv_file, description="Download last file"))
         d_comp = self._commands.get_completer()
         # todo: AUTO tab
         self._prompt_completer, m_dist = NestedCompleter.from_nested_dict(d_comp)  # pattern=re.compile(r"(\/\w+)")
@@ -83,50 +83,43 @@ class Client:
     async def _com_help(self, *args):
         print(self._commands.info)
 
-    async def _test(self, *args):
-        print('Start sleep')
-        time.sleep(4)
-        print('sleeped')
-
-    async def _req_load(self, *args):
-        await self._send_msg('/d'.encode('utf8'))
-
-    async def _recv_file_1(self, *args, c_bits=4096):
+    async def _recv_file(self, *args, c_bits=4096):
         reader, writer = await asyncio.open_connection(host=self._server_ip_file, port=self._server_port_file)
         writer.write(f'/d {self.__ip} {self.__port}'.encode())
         await writer.drain()
         data = await reader.read(c_bits)
         data = data.decode()
-        print(data)
         f_type, f_size, file_name = data.split()
         f_size = int(f_size)
         while True:
             try:
                 with open(buffer + file_name, 'wb') as f:
                     download = 0
-                    loadbar = self._progress.new_bar(file_name, f_size, 'Download')
+                    # todo: bottom bar handler
+                    loadbar = self._progress.new_bar(file_name, f_size, 'Download', )
                     data = await reader.read(c_bits)
                     while data and download < f_size:
                         f.write(data)
                         download += c_bits
                         loadbar(download)
-                        print(download)
-                        data = await reader.read(c_bits)
+                        if download < f_size:
+                            data = await reader.read(c_bits)
             except socket.timeout:
                 print("send data timeout")
-                break
             except socket.error as ex:
                 print("send data error:", ex)
-                break
             except Exception:
                 # Get the traceback object
                 tb = sys.exc_info()[2]
                 tbinfo = traceback.format_tb(tb)[0]
                 # Concatenate information together concerning the error into a message string
                 pymsg = "PYTHON ERRORS:\nTraceback info:\n" + tbinfo + "\nError Info:\n" + str(sys.exc_info()[1])
+                print(pymsg)
+            finally:
+                break
         writer.close()
 
-    async def _recv_file(self, *args, c_bits=4096):
+    async def _recv_file_1(self, *args, c_bits=4096):
         reader, writer = await asyncio.open_connection(host=self._server_ip_file, port=self._server_port_file)
         writer.write(f'/d {self.__ip} {self.__port}'.encode())
         await writer.drain()
@@ -175,7 +168,12 @@ class Client:
                 print('Bad request')
                 break
             except Exception:
-                print('This')
+                # Get the traceback object
+                tb = sys.exc_info()[2]
+                tbinfo = traceback.format_tb(tb)[0]
+                # Concatenate information together concerning the error into a message string
+                pymsg = "PYTHON ERRORS:\nTraceback info:\n" + tbinfo + "\nError Info:\n" + str(sys.exc_info()[1])
+                print(pymsg)
         writer.close()
         print('GOT')
 
@@ -220,11 +218,6 @@ class Client:
                             raise
                         line = f.read(c_bits)
                 writer.close()
-                # send_th.start()
-                # with send_lock:
-                #     send_th.join()
-                # loadbar.end()
-
             except FileNotFoundError:
                 print('Cam\'t find file %s' % f_path)
 
@@ -265,13 +258,17 @@ class Client:
             command = self._commands.get_com(com[0])
             if command.get_scope() == 'Client':
                 try:
-                    asyncio.create_task(command(*com[1:]))
+                    # asyncio.create_task(command(*com[1:]))
+                    asyncio.ensure_future(command(*com[1:]))
+                    # asyncio.run_coroutine_threadsafe(command(*[com[1:]]), self._loop)
+                    # await command(*com[1:])
                 except Exception:
                     # Get the traceback object
                     tb = sys.exc_info()[2]
                     tbinfo = traceback.format_tb(tb)[0]
                     # Concatenate information together concerning the error into a message string
                     pymsg = "PYTHON ERRORS:\nTraceback info:\n" + tbinfo + "\nError Info:\n" + str(sys.exc_info()[1])
+                    print(pymsg)
                 # await asyncio.wait([command(*com[1:])])
                 # self._loop.run_in_executor(None, command, *com[1:])
             else:
@@ -281,13 +278,24 @@ class Client:
 
     async def sender(self):
         session = PromptSession(message='> ', completer=self._prompt_completer, complete_in_thread=True,
-                                bottom_toolbar=self.get_rprompt, refresh_interval=1)
+                                auto_suggest=AutoSuggestFromHistory(), refresh_interval=0.5,
+                                bottom_toolbar=self.get_rprompt)
         with patch_stdout():
             message = await session.prompt_async()
         while message != '/e':
             if message:
                 if message[0] == '/':
-                    await self._command_handler(message)
+                    try:
+                        # asyncio.ensure_future(self._command_handler(message))
+                        await self._command_handler(message)
+                    except Exception:
+                        # Get the traceback object
+                        tb = sys.exc_info()[2]
+                        tbinfo = traceback.format_tb(tb)[0]
+                        # Concatenate information together concerning the error into a message string
+                        pymsg = "PYTHON ERRORS:\nTraceback info:\n" + tbinfo + "\nError Info:\n" + str(
+                            sys.exc_info()[1])
+                        print(pymsg)
                 else:
                     await self._send_msg(message.encode('utf-8'))
             with patch_stdout():
@@ -309,6 +317,7 @@ class Client:
 
     async def sender_DB(self):
         message = await self._loop.run_in_executor(None, input, '> ')
+        print('DEBUG INPUT')
         while message != '/e':
             if message and message[0] == '/':
                 await self._command_handler(message)
@@ -325,10 +334,6 @@ class Client:
 
     def close_con(self):
         self.sock.close()
-        try:
-            self._file_sock.close()
-        except:
-            pass
         self._loop.stop()
         exit()
 
