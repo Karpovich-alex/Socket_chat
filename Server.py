@@ -159,10 +159,10 @@ class Chat_server():
         if self._last_file:
             writer.write(self._last_file.encode())
             await writer.drain()
-            await asyncio.sleep(1)
+            # await asyncio.sleep(1)
             f_type, f_size, file_name = self._last_file.split()
             logger.info(f"User ({client_ip}, {client_port}) start recv {file_name}")
-            await asyncio.sleep(1)
+            # await asyncio.sleep(1)
             try:
                 while True:
                     with open(buffer + file_name, 'rb') as f:
@@ -180,8 +180,8 @@ class Chat_server():
                             break
                         await self.send_msg("{} : File {} has downloaded".format('{}', file_name),
                                             m_type='notice', to_user=(client_ip, client_port))
-                        logger.info(f"User ({client_ip}, {client_port}) received {file_name}")
-                        break
+                    logger.info(f"User ({client_ip}, {client_port}) received {file_name}")
+                    break
             except FileNotFoundError:
                 await self.send_msg("{} : Can't find file {}".format('{}', file_name), m_type='notice',
                                     to_user=(client_ip, client_port))
@@ -199,7 +199,6 @@ class Chat_server():
             f_size = int(f_size)
             client_port = int(client_port)
             self._user_db.get_user((client_ip, client_port))
-
             downloaded_size = 0
             logger.info(
                 f"User ({client_ip}, {client_port}) using {addr} is uploading file {file_name} size: {f_size} type: {f_type}")
@@ -208,7 +207,7 @@ class Chat_server():
                 data = await reader.read(c_bits)
                 while downloaded_size < f_size and data:
                     f.write(data)
-                    downloaded_size += len(data)
+                    downloaded_size += c_bits
                     if downloaded_size < f_size:
                         data = await reader.read(c_bits)
             logger.info(

@@ -1,7 +1,6 @@
 from typing import Callable, Tuple, Optional
 
 
-# todo: Cub Command
 class Command:
     def __init__(self, name: str, com: str, *actions: Callable, description: str = "", scope: str = 'Client',
                  sub_command: Tuple = (), completer=None):
@@ -16,7 +15,6 @@ class Command:
             for sub_com in self._sub_command:
                 sub_com.set_completer(completer)
 
-    # todo: make output great
     def __repr__(self):
         out = f"{self._com} - {self._description if self._description else self._name}"
         sub_out = ''

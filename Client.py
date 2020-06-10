@@ -20,7 +20,7 @@ import numpy
 import os
 import sys
 
-# todo: принимать сообщения сервер
+
 p_lock = threading.RLock()
 server_adress = ("127.0.0.1", 10001)
 DB = False
@@ -108,7 +108,7 @@ class Client:
                 print("send data timeout")
             except socket.error as ex:
                 print("send data error:", ex)
-            except Exception:
+            except BaseException:
                 # Get the traceback object
                 tb = sys.exc_info()[2]
                 tbinfo = traceback.format_tb(tb)[0]
@@ -279,7 +279,7 @@ class Client:
     async def sender(self):
         session = PromptSession(message='> ', completer=self._prompt_completer, complete_in_thread=True,
                                 auto_suggest=AutoSuggestFromHistory(), refresh_interval=0.5,
-                                bottom_toolbar=self.get_rprompt)
+                                 complete_while_typing=True, bottom_toolbar=self.get_bottom)#refresh_interval=0.5,bottom_toolbar=self.get_bottom
         with patch_stdout():
             message = await session.prompt_async()
         while message != '/e':
@@ -303,8 +303,8 @@ class Client:
         await self._send_msg(message.encode('utf-8'))
         self.close_con()
 
-    def get_rprompt(self):
-        return self._progress.get_progress()
+    def get_bottom(self):
+        return self._progress.get_progress() or ' '
 
     async def _send_msg(self, message: bytes):
         try:

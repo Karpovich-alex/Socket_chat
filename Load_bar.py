@@ -5,29 +5,32 @@ import math
 
 class ProgressBarOrganiser:
     def __init__(self, length=10):
+        assert length > 0
         self._length = length
-        self._progres_bars = []
+        self._progress_bars = []
         self._max_name = 0
         self._max_act = 0
 
-    def new_bar(self, name: str, total_tasks: int, action: str = ' ', p: bool = False):
-        bar = ProgressBar(name, total_tasks, self._length, p)
+    def new_bar(self, name: str, total_tasks: int, action: str = ' ', printable: bool = False,
+                complete_text: str = 'Complete'):
+        assert total_tasks > 0
+        bar = ProgressBar(name, total_tasks, self._length, p=printable, complete_text=complete_text)
         if self._max_name < len(name):
             self._max_name = len(name)
         if self._max_act < len(action):
             self._max_act = len(action)
-        self._progres_bars.append((action, bar))
+        self._progress_bars.append((action, bar))
         return bar
 
     def __bool__(self):
-        return len(self._progres_bars) > 0
+        return len(self._progress_bars) > 0
 
     def get_progress(self):
-        msg = "\n".join(map(lambda x: f"{x[0] :<{self._max_act}} : {x[1].name :<{self._max_name}} {x[1].get_load()}",
-                            self._progres_bars))
-        for bar in self._progres_bars:
+        msg = "\n".join(map(lambda x: f"{x[0] :<{self._max_act}} : {x[1].name :<{self._max_name}} {x[1].current_load}",
+                            self._progress_bars))
+        for bar in self._progress_bars:
             if bar[1].complete:
-                self._progres_bars.remove(bar)
+                self._progress_bars.remove(bar)
         return msg or 'No loads'
 
     def __repr__(self):
@@ -36,39 +39,58 @@ class ProgressBarOrganiser:
 
 class ProgressBar:
     # todo: Time
-    def __init__(self, name: str, total_tasks: int, length: int = 10, p=False):
+    def __init__(self, name: str, total_tasks: int, length: int = 10, p=False, complete_text: str = 'Complete', fill_char='*', empty_char='='):
+        assert total_tasks > 0
+        assert length > 0
         self.name = name
         self._p = p
         self._length: int = length
         self._total_t = total_tasks
-        self._interest_for_one_point = math.ceil(total_tasks / length)
-        self.file = sys.stdout
+        self._interest_for_one_point = round(total_tasks / length)
+        self.file = sys.stderr
         self.complete = False
+        self._complete_text = complete_text
         self._msg = ""
+        self._time_start = time.time()
+        self._current_task = 0
+        self._fill_char=fill_char
+        self._empty_char=empty_char
+        # create "zero" progress bar
         self(0)
 
     def __call__(self, cur_task: int):
-        if cur_task >= self._total_t - 1:
+        if cur_task >= self._total_t:
             self.end()
         else:
-            cur_int = (cur_task / self._total_t) * 100
-            cur_l = '*' * math.ceil(cur_task / self._interest_for_one_point)
-            # print('\r', end='', file=self.file)
-            self._len_msg = len(f'{self.name} |{cur_l:_<{self._length + 2}}| {cur_int:.1f}%')
-            self._msg = f'|{cur_l:_<{self._length + 2}}| {cur_int:.1f}%'
+            self._current_task = cur_task
+            cur_int = (self._current_task / self._total_t) * 100
+            cur_l = self._fill_char * round(self._current_task / self._interest_for_one_point)  # math.ceil
+            self._msg = f"|{cur_l:{self._empty_char}<{self._length}}| {cur_int:.1f}% [{time.strftime('%M:%S', time.gmtime(self.time_left))}]"
+            self._len_msg = len(self._msg)
             if self._p:
-                print(self._msg, end='', file=self.file)
+                print(f"\r {self.name} {self._msg}", end='\r', file=self.file)
+                self._len_msg = len(f"\r {self.name} {self._msg}")
 
     def __repr__(self):
         return self._msg
 
-    def end(self, text='Complete'):
-        self._msg = text
+    @property
+    def time_left(self):
+        if self._current_task:
+            cur_avg_time = round((time.time() - self._time_start) / self._current_task, 2)
+        else:
+            cur_avg_time = 1
+        avg_time_left = (self._total_t - self._current_task) * cur_avg_time
+        return avg_time_left
+
+    def end(self):
+        self._msg = self._complete_text
         self.complete = True
         if self._p:
-            print(self._msg, end='\r', flush=True, file=self.file)
+            print('\r'+self._msg+' '*self._len_msg, flush=True, file=self.file)
 
-    def get_load(self):
+    @property
+    def current_load(self):
         return self._msg
 
 
