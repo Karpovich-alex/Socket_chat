@@ -4,22 +4,19 @@ import asyncio
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from prompt_toolkit.completion import PathCompleter, NestedCompleter
-from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from tools.Completer import NestedCompleter
-# from prompt_toolkit.shortcuts import ProgressBar
-from contextlib import closing
 from tools.commands import CommandARCH, Command
-from Load_bar import ProgressBarOrganiser
+from Load_bar import ProgressBarOrganiser, ProgressBar, DataTransportSpeed
+from contextlib import closing
 import re
 import traceback
+import os
+import sys
 import time
 import pickle
 import cv2
 import numpy
-import os
-import sys
-
 
 p_lock = threading.RLock()
 server_adress = ("127.0.0.1", 10001)
@@ -58,6 +55,7 @@ class Client:
             else:
                 event_loop.run_until_complete(self.sender())
 
+    # todo: Choose file from server
     def _make_commands(self):
         with CommandARCH('Client') as self._commands:
             self._commands.add_commands(Command('help', '/h', self._com_help, description="Print all commands"))
@@ -76,7 +74,7 @@ class Client:
             self._commands.add_commands(
                 Command('download file', '/d', self._recv_file, description="Download last file"))
         d_comp = self._commands.get_completer()
-        # todo: AUTO tab
+
         self._prompt_completer, m_dist = NestedCompleter.from_nested_dict(d_comp)  # pattern=re.compile(r"(\/\w+)")
         self._prompt_completer(m_dist)
 
@@ -96,7 +94,9 @@ class Client:
                 with open(buffer + file_name, 'wb') as f:
                     download = 0
                     # todo: bottom bar handler
-                    loadbar = self._progress.new_bar(file_name, f_size, 'Download', )
+                    loadbar = self._progress.new_bar(
+                        ProgressBar(file_name, f_size, iter_speed=DataTransportSpeed('bit')),
+                        action='Download')
                     data = await reader.read(c_bits)
                     while data and download < f_size:
                         f.write(data)
@@ -118,64 +118,6 @@ class Client:
             finally:
                 break
         writer.close()
-
-    async def _recv_file_1(self, *args, c_bits=4096):
-        reader, writer = await asyncio.open_connection(host=self._server_ip_file, port=self._server_port_file)
-        writer.write(f'/d {self.__ip} {self.__port}'.encode())
-        await writer.drain()
-        while True:
-            try:
-                data = await reader.read(c_bits)
-                data = data.decode()
-                print('<<<<<<<<<<<', data)
-                f_type, f_size, file_name = data.split()
-                f_size = int(f_size)
-                print(f'Downloading: {file_name} type: {f_type} size: {f_size} b')
-                with open(buffer + file_name, 'wb') as f:
-                    try:
-                        loadbar = self._progress.new_bar(file_name, f_size, 'Downloading', p=False)
-                        downloaded_size = 0
-                        data = await reader.read(c_bits)
-                        print('H1')
-                        while downloaded_size < f_size and data:
-                            f.write(data)
-                            downloaded_size += len(data)
-                            loadbar(downloaded_size)
-                            if downloaded_size < f_size:
-                                data = await reader.read(c_bits)
-                                print('H100')
-                        # while downloaded_size < f_size:
-                        #     try:
-                        #         data = await reader.read(c_bits)
-                        #         print(data)
-                        #     except BaseException as ex:
-                        #         print('Got here: ', ex)
-                        #     if data:
-                        #         f.write(data)
-                        #         downloaded_size += len(data)
-                        #         loadbar(downloaded_size)
-                        #     else:
-                        #         break
-                        print('GOT!111')
-                    except socket.timeout:
-                        print("send data timeout")
-                        break
-                    except socket.error as ex:
-                        print("send data error:", ex)
-                        break
-                break
-            except UnicodeEncodeError:
-                print('Bad request')
-                break
-            except Exception:
-                # Get the traceback object
-                tb = sys.exc_info()[2]
-                tbinfo = traceback.format_tb(tb)[0]
-                # Concatenate information together concerning the error into a message string
-                pymsg = "PYTHON ERRORS:\nTraceback info:\n" + tbinfo + "\nError Info:\n" + str(sys.exc_info()[1])
-                print(pymsg)
-        writer.close()
-        print('GOT')
 
     async def _send_file(self, *args, c_bits=4096):
         if not args or len(args[0].split()) != 2:
@@ -200,7 +142,8 @@ class Client:
                     print("send data error:", ex)
                 await asyncio.sleep(1)
                 with open(f_path, 'rb') as f:
-                    loadbar = self._progress.new_bar(f_name, f_size, 'Uploading', p=False)
+                    loadbar = self._progress.new_bar(ProgressBar(f_name, f_size, iter_speed=DataTransportSpeed('bit')),
+                                                     action='Uploading')
                     loaded = 0
                     line = f.read(c_bits)
                     while line:
@@ -279,7 +222,8 @@ class Client:
     async def sender(self):
         session = PromptSession(message='> ', completer=self._prompt_completer, complete_in_thread=True,
                                 auto_suggest=AutoSuggestFromHistory(), refresh_interval=0.5,
-                                 complete_while_typing=True, bottom_toolbar=self.get_bottom)#refresh_interval=0.5,bottom_toolbar=self.get_bottom
+                                complete_while_typing=True,
+                                bottom_toolbar=self.get_bottom)  # refresh_interval=0.5,bottom_toolbar=self.get_bottom
         with patch_stdout():
             message = await session.prompt_async()
         while message != '/e':
@@ -304,7 +248,7 @@ class Client:
         self.close_con()
 
     def get_bottom(self):
-        return self._progress.get_progress() or ' '
+        return self._progress.get_progress()
 
     async def _send_msg(self, message: bytes):
         try:

@@ -248,6 +248,7 @@ class Chat_server():
                 writer.close()
             break
 
+    # todo: Name validation
     async def send_msg(self, msg: str, from_user: Tuple[str, int] = ('Server', 0),
                        to_user: Tuple[str, int] = ('All', 0),
                        m_type='msg'):
