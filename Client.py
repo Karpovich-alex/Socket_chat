@@ -7,16 +7,12 @@ from prompt_toolkit.completion import PathCompleter, NestedCompleter
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from tools.Completer import NestedCompleter
 from tools.commands import CommandARCH, Command
-from Load_bar import ProgressBarOrganiser, ProgressBar, DataTransportSpeed
+from tools.Load_bar import ProgressBarOrganiser, ProgressBar, DataTransportSpeed
 from contextlib import closing
 import re
 import traceback
 import os
 import sys
-import time
-import pickle
-import cv2
-import numpy
 
 p_lock = threading.RLock()
 server_adress = ("127.0.0.1", 10001)

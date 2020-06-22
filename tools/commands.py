@@ -6,7 +6,7 @@ class Command:
                  sub_command: Tuple = (), completer=None):
         self._name = name
         self._com = com
-        self._actions = actions or None
+        self._actions = actions or []
         self._description = description
         self._scope = scope
         self._sub_command = sub_command
@@ -49,6 +49,13 @@ class Command:
     def get_scope(self):
         return self._scope
 
+    def get_name(self):
+        return self._name
+
+    def set_action(self, action):
+        self._actions.append(action)
+        return self
+
     async def __call__(self, *args, **kwargs):
         return await self._do_com(*args, **kwargs)
 
@@ -63,8 +70,21 @@ class CommandARCH:
         # self.info = self._get_info()
         self.info = ""
 
-    def add_commands(self, command: Command):
+    def add_command(self, command: Command):
         self._allcom_db[command.get_com()] = command
+
+    # todo: test this \/
+    def add_func(self, command: Command):
+        def decorator(func):
+            name = command.get_name()
+            if self.check_com(command.get_name()):
+                com: Command = self._allcom_db[name]
+                self._allcom_db[name] = com.set_action(func)
+            else:
+                self._allcom_db[name] = command
+            return func
+
+        return decorator
 
     def _add_com_to_db(self):
         pass
