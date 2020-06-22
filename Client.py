@@ -3,7 +3,7 @@ import threading
 import asyncio
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
-from prompt_toolkit.completion import PathCompleter, NestedCompleter
+from prompt_toolkit.completion import PathCompleter
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from tools.Completer import NestedCompleter
 from tools.commands import CommandARCH, Command
@@ -24,6 +24,7 @@ send_lock = threading.RLock()
 
 
 class Client:
+    # todo: New class view
     def __init__(self, server_info):
         self._server_ip, self._server_port = server_info
         self._make_commands()
@@ -54,25 +55,24 @@ class Client:
     # todo: Choose file from server
     def _make_commands(self):
         with CommandARCH('Client') as self._commands:
-            self._commands.add_commands(Command('help', '/h', self._com_help, description="Print all commands"))
-            self._commands.add_commands(
+            self._commands.add_command(Command('help', '/h', self._com_help, description="Print all commands"))
+            self._commands.add_command(
                 Command('exit user', '/e', description="Exit from server", scope='Server'))
-            self._commands.add_commands(
+            self._commands.add_command(
                 Command('info', '/i', description="View info", scope='Server'))
-            self._commands.add_commands(
+            self._commands.add_command(
                 Command('name', '/n', description="Change your name", scope='Server'))
-            self._commands.add_commands(Command('send file', '/f', self._send_file, description="Send file",
+            self._commands.add_command(Command('send file', '/f', self._send_file, description="Send file",
                                                 sub_command=(Command('image', '/img'),
                                                              Command('film', '/film'),
                                                              Command('document', '/doc'),
                                                              Command('other', '/other')),
                                                 completer=PathCompleter()))
-            self._commands.add_commands(
+            self._commands.add_command(
                 Command('download file', '/d', self._recv_file, description="Download last file"))
         d_comp = self._commands.get_completer()
 
-        self._prompt_completer, m_dist = NestedCompleter.from_nested_dict(d_comp)  # pattern=re.compile(r"(\/\w+)")
-        self._prompt_completer(m_dist)
+        self._prompt_completer = NestedCompleter.from_nested_dict(d_comp)  # pattern=re.compile(r"(\/\w+)")
 
     async def _com_help(self, *args):
         print(self._commands.info)

@@ -53,11 +53,11 @@ class Chat_server():
     # todo: make commands
     def _set_commands(self):
         with CommandARCH('Users') as self._user_commands:
-            self._user_commands.add_commands(
+            self._user_commands.add_command(
                 Command('exit user', '/e', self._u_exit, description="Exit from server", scope='Server'))
-            self._user_commands.add_commands(
+            self._user_commands.add_command(
                 Command('info', '/i', self._u_info, description="View info", scope='Server'))
-            self._user_commands.add_commands(
+            self._user_commands.add_command(
                 Command('name', '/n', self._u_set_name, description="Change your name", scope='Server'))
             # self._user_commands.add_commands(Command('Accept file', '/f', self._recieve_file))
             # self._user_commands.add_commands(Command('Send file', '/d', self._u_send_file))
@@ -180,8 +180,8 @@ class Chat_server():
                             break
                         await self.send_msg("{} : File {} has downloaded".format('{}', file_name),
                                             m_type='notice', to_user=(client_ip, client_port))
-                    logger.info(f"User ({client_ip}, {client_port}) received {file_name}")
-                    break
+                        logger.info(f"User ({client_ip}, {client_port}) received {file_name}")
+                        break
             except FileNotFoundError:
                 await self.send_msg("{} : Can't find file {}".format('{}', file_name), m_type='notice',
                                     to_user=(client_ip, client_port))
@@ -199,6 +199,7 @@ class Chat_server():
             f_size = int(f_size)
             client_port = int(client_port)
             self._user_db.get_user((client_ip, client_port))
+
             downloaded_size = 0
             logger.info(
                 f"User ({client_ip}, {client_port}) using {addr} is uploading file {file_name} size: {f_size} type: {f_type}")
@@ -207,7 +208,7 @@ class Chat_server():
                 data = await reader.read(c_bits)
                 while downloaded_size < f_size and data:
                     f.write(data)
-                    downloaded_size += c_bits
+                    downloaded_size += len(data)
                     if downloaded_size < f_size:
                         data = await reader.read(c_bits)
             logger.info(

@@ -1,4 +1,4 @@
-from typing import Callable, Tuple, Optional
+from typing import Callable, Tuple
 
 
 class Command:
@@ -27,14 +27,16 @@ class Command:
         return self.__repr__()
 
     def set_completer(self, compl):
-        self._completer = compl
+        if not self._completer:
+            self._completer = compl
+        else:
+            raise ValueError('Can\'t assign one command with two completers')
 
     def get_completer(self):
         sub_dict = dict()
         if self._sub_command:
             for sub_com in self._sub_command:
                 sub_dict.update(sub_com.get_completer())
-            # return {self._com: dict(lambda x: {x._com : x.get_completer()}, self._sub_command)}
             return {self._com: (self._description, sub_dict)}
         else:
             return {self._com: (self._description, self._completer)}
@@ -67,7 +69,6 @@ class CommandARCH:
             pass
         else:
             self._allcom_db = dict()
-        # self.info = self._get_info()
         self.info = ""
 
     def add_command(self, command: Command):
@@ -133,9 +134,6 @@ class CommandARCH:
 
 # Tests
 if __name__ == '__main__':
-    import pickle
-
-
     def helper(inp, *args, **kwargs):
         print('help:', inp)
         print(kwargs)
@@ -152,8 +150,8 @@ if __name__ == '__main__':
     # arch_1=CommandARCH('Test')
     with CommandARCH('Test') as arch2:
         new_c = Command('helper', '/h', help, shit, description='Don\'t know')
-        arch2.add_commands(new_c)
-        arch2.add_commands(Command('Super_comand', '/super', super, description='Just 2+1'))
+        arch2.add_command(new_c)
+        arch2.add_command(Command('Super_comand', '/super', super, description='Just 2+1'))
     print(arch2.info)
     print(arch2)
     print(arch2.get_completer())
