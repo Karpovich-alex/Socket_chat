@@ -23,9 +23,6 @@ class Command:
             sub_out += '\n'.join(map(lambda x: "\t" + str(x), self._sub_command))
         return out + sub_out
 
-    def __str__(self):
-        return self.__repr__()
-
     def set_completer(self, compl):
         if not self._completer:
             self._completer = compl
@@ -78,11 +75,10 @@ class CommandARCH:
     def add_func(self, command: Command):
         def decorator(func):
             name = command.get_name()
-            if self.check_com(command.get_name()):
-                com: Command = self._allcom_db[name]
-                self._allcom_db[name] = com.set_action(func)
-            else:
+            if name not in self:
                 self._allcom_db[name] = command
+            com: Command = self._allcom_db[name]
+            self._allcom_db[name] = com.set_action(func)
             return func
 
         return decorator

@@ -1,26 +1,23 @@
 import asyncio
 from typing import Tuple
-from User_data_base.UserDB import UserDB
-from tools.config import IP, PORT
-import tools.logger_example
+from Server.User_data_base.UserDB import UserDB
+from Server.config import IP, PORT, buffer, PORT_FILES
 import logging
 import traceback
 from tools.commands import CommandARCH, Command
-import pickle
 
 # todo: command_handler
 # todo: user login timeout
 # todo: command server class
 # todo: critical error feedback
 logger = logging.getLogger("tools.logger_example.server")
-buffer = 'buffer/'
 
 
-class Chat_server():
-    def __init__(self, ip, port):
+class ChatServer:
+    def __init__(self, ip, port, port_files):
         self._ip_server = ip
         self._port_server = port
-        self._port_server_file = port + 1
+        self._port_server_file = port_files
         self._user_db: UserDB = UserDB()
         # self._commands_users = {'/e': self._u_exit, '/i': self._u_info, '/n': self._u_set_name,
         #                         '/f': self._recieve_file, '/d': self._u_send_file}
@@ -32,25 +29,9 @@ class Chat_server():
         '''
         self._welcome_msg = f'///welcome {self._port_server_file}'
         self._last_file = '/img 25405 cat.jpg'
-        # self._server_commands = CommandARCH('Server')
         self._set_commands()
-        try:
-            self._loop = asyncio.get_event_loop()
-            # Create server for messages
-            coro_chat = asyncio.start_server(self._handle_connection, self._ip_server, self._port_server,
-                                             loop=self._loop)
-            self._server: asyncio.AbstractServer = self._loop.run_until_complete(coro_chat)
-            # Create server for accepting files
-            coro_files = asyncio.start_server(self._handle_connection_file_server, self._ip_server,
-                                              self._port_server_file, loop=self._loop)
-            self._file_server = self._loop.run_until_complete(coro_files)
-            # Create server input
-            self._loop.create_task(self.input_consule())
-            logger.info('Serving on {}'.format(self._server.sockets[0].getsockname()))
-        except:
-            logger.critical("Uncaught exception: %s", traceback.format_exc())
 
-    # todo: make commands
+
     def _set_commands(self):
         with CommandARCH('Users') as self._user_commands:
             self._user_commands.add_command(
@@ -105,6 +86,12 @@ class Chat_server():
         logger.info(f"User {user.addr} exit")
 
     async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+        """
+        Create new connection. Take from server params for user, seve them and handle new messages.
+        :param reader: Reader object
+        :param writer: Writer object
+        :return:
+        """
         addr = writer.get_extra_info("peername")
         await self._handle_new_connection(addr, reader, writer)
         while True:
@@ -132,6 +119,13 @@ class Chat_server():
             await self._u_exit(addr)
 
     async def _handle_new_connection(self, addr, reader, writer):
+        """
+        Handle new connection. Send settings to client
+        :param addr: Tuple(ip, port)
+        :param reader:
+        :param writer:
+        :return:
+        """
         logger.info(f"User {addr} has connected")
         await self.send_msg("{} : User {} has connected".format('{}', addr), m_type='notice')
         await asyncio.sleep(0.1)
@@ -143,10 +137,17 @@ class Chat_server():
             to_user=addr, m_type='notice')
 
     async def _user_commands_handler(self, command: str, addr: Tuple):
+        """
+        Handle user commands which begins with /
+        :param command: Command
+        :param addr: Tuple(ip, port)
+        :return:
+        """
         commands = command.split(' ', maxsplit=1)
         command = commands[0]
         if command in self._user_commands:
             com = self._user_commands.get_com(command)
+            # todo: Check await
             await com(addr, *commands[1:])
         else:
             await self.send_msg('Unsupported command', to_user=addr)
@@ -261,7 +262,7 @@ class Chat_server():
         except ConnectionResetError as ex:
             logger.error("Got error: %s", traceback.format_exc())
         except BaseException as ex:
-            logger.critical("Uncaught exception: %s", ex)
+            logger.critical("Uncaught exception: %s", ex) #logging.error(exc_info = True) /  logging.exception()
 
     async def _send_msg_to_all(self, msg, from_user: Tuple[str, int], m_type='msg'):
         for user in self._user_db.get_all_users():
@@ -291,27 +292,45 @@ class Chat_server():
             logger.info("User has lost connection: %s", ex)
             await self._u_exit(to_user)
 
-    async def input_consule(self):
+    async def input_console(self):
         while True:
             message = await self._loop.run_in_executor(None, input)
-            logger.info('Got from concole: {}'.format(message))
+            logger.info('Got from console: {}'.format(message))
             # todo: Make commands & commands_handler
 
     def start(self):
         logger.info('Starting server')
         try:
+            self._loop = asyncio.get_event_loop()
+
+            # Create server for messages
+            coro_chat = asyncio.start_server(self._handle_connection, self._ip_server, self._port_server,
+                                             loop=self._loop)
+            self._server: asyncio.AbstractServer = self._loop.run_until_complete(coro_chat)
+
+            # Create server for accepting files
+            coro_files = asyncio.start_server(self._handle_connection_file_server, self._ip_server,
+                                              self._port_server_file, loop=self._loop)
+            self._file_server = self._loop.run_until_complete(coro_files)
+            # Create server input
+            self._loop.create_task(self.input_console())
+            logger.info('Serving on {}'.format(self._server.sockets[0].getsockname()))
             self._loop.run_forever()
         except KeyboardInterrupt:
             pass
+        except:
+            logger.critical("Uncaught exception: %s", traceback.format_exc())
 
         # Close the server
         self._server.close()
+        self._file_server.close()
         self._loop.run_until_complete(self._server.wait_closed())
+        self._loop.run_until_complete(self._file_server.wait_closed())
         self._loop.close()
 
 
 # todo: Noticcer new class
 
 if __name__ == '__main__':
-    server = Chat_server(IP, PORT)
+    server = ChatServer(IP, PORT, PORT_FILES)
     server.start()

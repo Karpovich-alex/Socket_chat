@@ -46,8 +46,10 @@ class Client:
 
             if data:
                 message = data.decode()
-                self.print_th("received %r from %r" % (message, self._addr))
-
+                self.print_th("received %r from %r" % (message, '10001'))
+            else:
+                self._writer.close()
+                self.stop(' ')
     async def async_input(self):
         session = PromptSession()
         while True:
@@ -80,7 +82,8 @@ class Client:
 
     @staticmethod
     def print_th(text):
-        print(text)
+        with patch_stdout():
+            print(text)
 
     def stop(self, msg):
         # self._loop.close()
