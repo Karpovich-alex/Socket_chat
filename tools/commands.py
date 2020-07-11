@@ -135,19 +135,18 @@ if __name__ == '__main__':
         print(kwargs)
 
 
-    def shit(*args, **kwargs):
-        print('Shit this %s' % kwargs)
-
-
     def super(*args, **kwargs):
         return 2 + 1
 
 
+    def com_1(*args, **kwargs):
+        print(f'Got args:{args} and kwargs:{kwargs}')
+
     # arch_1=CommandARCH('Test')
     with CommandARCH('Test') as arch2:
-        new_c = Command('helper', '/h', help, shit, description='Don\'t know')
+        new_c = Command('helper', '/h', helper, com_1, description='Don\'t know')
         arch2.add_command(new_c)
-        arch2.add_command(Command('Super_comand', '/super', super, description='Just 2+1'))
+        arch2.add_command(Command('Super_command', '/super', super, description='Just 2+1'))
     print(arch2.info)
     print(arch2)
     print(arch2.get_completer())
