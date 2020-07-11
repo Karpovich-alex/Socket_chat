@@ -15,12 +15,10 @@ import os
 import sys
 
 p_lock = threading.RLock()
-server_adress = ("127.0.0.1", 10001)
+server_address = ("127.0.0.1", 10001)
 DB = False
 loop = asyncio.get_event_loop()
 buffer = 'client_buffer/'
-recv_lock = threading.RLock()
-send_lock = threading.RLock()
 
 
 class Client:
@@ -63,11 +61,11 @@ class Client:
             self._commands.add_command(
                 Command('name', '/n', description="Change your name", scope='Server'))
             self._commands.add_command(Command('send file', '/f', self._send_file, description="Send file",
-                                                sub_command=(Command('image', '/img'),
-                                                             Command('film', '/film'),
-                                                             Command('document', '/doc'),
-                                                             Command('other', '/other')),
-                                                completer=PathCompleter()))
+                                               sub_command=(Command('image', '/img'),
+                                                            Command('film', '/film'),
+                                                            Command('document', '/doc'),
+                                                            Command('other', '/other')),
+                                               completer=PathCompleter()))
             self._commands.add_command(
                 Command('download file', '/d', self._recv_file, description="Download last file"))
         d_comp = self._commands.get_completer()
@@ -279,5 +277,5 @@ class Client:
 
 
 if __name__ == '__main__':
-    client = Client(server_adress)
+    client = Client(server_address)
     client.start()

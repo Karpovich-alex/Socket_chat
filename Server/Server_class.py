@@ -5,7 +5,8 @@ from Server.config import IP, PORT, buffer, PORT_FILES
 import logging
 import traceback
 from tools.commands import CommandARCH, Command
-
+from Server.Server_chat import AbstractServer
+from Server.Model import DataBaseConnection
 # todo: command_handler
 # todo: user login timeout
 # todo: command server class
@@ -13,12 +14,13 @@ from tools.commands import CommandARCH, Command
 logger = logging.getLogger("tools.logger_example.server")
 
 
-class ChatServer:
+class ChatServer(AbstractServer):
     def __init__(self, ip, port, port_files):
         self._ip_server = ip
         self._port_server = port
         self._port_server_file = port_files
         self._user_db: UserDB = UserDB()
+        self._data_base = DataBaseConnection()
         # self._commands_users = {'/e': self._u_exit, '/i': self._u_info, '/n': self._u_set_name,
         #                         '/f': self._recieve_file, '/d': self._u_send_file}
         # todo: new description
@@ -87,11 +89,12 @@ class ChatServer:
 
     async def _handle_connection(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
         """
-        Create new connection. Take from server params for user, seve them and handle new messages.
+        Create new connection. Take from server params for user, save them and handle new messages from user.
         :param reader: Reader object
         :param writer: Writer object
         :return:
         """
+        await self._data_base.prepare()
         addr = writer.get_extra_info("peername")
         await self._handle_new_connection(addr, reader, writer)
         while True:
@@ -111,6 +114,8 @@ class ChatServer:
             if data:
                 message = data.decode()
                 logger.info("{} >> {}".format(addr, message))
+                await self._data_base.add_message(from_user=self._data_base.get_user_id(addr), to_user=0, message_text=message,
+                                                  message_type='text')
                 if message[0] == '/':
                     await self._user_commands_handler(message, addr)
                 else:
@@ -127,6 +132,7 @@ class ChatServer:
         :return:
         """
         logger.info(f"User {addr} has connected")
+        await self._data_base.add_user(login=str(addr[0] + ' '+str(addr[1])), password='')
         await self.send_msg("{} : User {} has connected".format('{}', addr), m_type='notice')
         await asyncio.sleep(0.1)
         await self._user_db.add_user(addr, reader, writer)
@@ -193,7 +199,7 @@ class ChatServer:
         else:
             await self.send_msg(f"Can't find last file", to_user=addr)
 
-    async def _recv_file(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, data, c_bits=4096):
+    async def _receive_file(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, data, c_bits=4096):
         addr = writer.get_extra_info("peername")
         if len(data) == 5:
             f_size, f_type, file_name, client_ip, client_port = data
@@ -241,7 +247,7 @@ class ChatServer:
                 break
             data = data.split()
             if data[0] == '/f':
-                await self._recv_file(reader, writer, data[1:], c_bits=c_bits)
+                await self._receive_file(reader, writer, data[1:], c_bits=c_bits)
             elif data[0] == '/d':
                 await self._send_file(reader, writer, data[1:], c_bits=c_bits)
             else:
