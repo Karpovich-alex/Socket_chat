@@ -9,39 +9,54 @@ from tools.Completer import NestedCompleter
 from tools.commands import CommandARCH, Command
 from tools.Load_bar import ProgressBarOrganiser, ProgressBar, DataTransportSpeed
 from contextlib import closing
+from tools.message.message import Message
 import re
 import traceback
 import os
 import sys
+from time import time, sleep
 
-p_lock = threading.RLock()
 server_address = ("127.0.0.1", 10001)
 DB = False
 loop = asyncio.get_event_loop()
 buffer = 'client_buffer/'
+LOGIN_TIMEOUT = 5
 
 
 class Client:
     # todo: New class view
     def __init__(self, server_info):
-        self._server_ip, self._server_port = server_info
         self._make_commands()
+        self._progress = ProgressBarOrganiser(length=20)
+
         # Info about file server acceptor
+        self._server_ip, self._server_port = server_info
         self._server_port_file = 0
         self._server_ip_file = self._server_ip
-        self._progress = ProgressBarOrganiser(length=20)
+
+        # Threads and loops vars
+        self._thread_recv = None
+        self._loop = None
+        self.sock = None
+
+        # Client info
+        self._ip = ''
+        self._port = 0
+        self._login = False
+        self._login_data = None
 
     def start(self):
         try:
             print(f'Try to connect : {(self._server_ip, self._server_port)}')
             self.sock = socket.create_connection((self._server_ip, self._server_port))
             print('Your ip: {}'.format(self.sock.getsockname()))
-            self.__ip, self.__port = self.sock.getsockname()
+            self._ip, self._port = self.sock.getsockname()
         except socket.timeout:
             exit('Server not found')
         except socket.error as ex:
             exit(f'Got unexpected error: {ex}')
-        self._thread_recv = threading.Thread(target=self.receive_msg, name="recieve_message")
+        self.login_win()
+        self._thread_recv = threading.Thread(target=self.receive_msg, name="receive_messages")
         self._loop = asyncio.get_event_loop()
         self._thread_recv.start()
         with closing(self._loop) as event_loop:
@@ -159,35 +174,38 @@ class Client:
                 print('Cam\'t find file %s' % f_path)
 
     def receive_msg(self):
+        data = None
         while True:
             try:
                 data = self.sock.recv(1024)
             except ConnectionAbortedError:
                 self.close_con()
+                break
             except ConnectionResetError:
                 print('Server disconnected')
                 self.close_con()
+                break
             except socket.error as ex:
                 print("send data error:", ex)
                 self.close_con()
+                break
             if data:
                 try:
-                    data = data.decode('utf8')
-                    if data.startswith('///'):  # init message
-                        self._server_port_file = int(re.match(r"\d*", data.split()[1])[0])
-                    elif 0:
-                        pass
-                        # if data.startswith('/') and data.find('>>') == -1:
-                        # self._thread_recv_file = Archive.Thread(target=self._load_file, args=(data,),
-                        #                                       name='Receiving file')
-                        # self._thread_recv_file.start()
-                        # time.sleep(2)
-                        # with recv_lock:
-                        #     self._thread_recv_file.join()
-                    else:
-                        print(data)
+                    self._message_handler(data)
                 except UnicodeDecodeError:
                     pass
+
+    # todo: change if to COMMANDARCH
+    def _message_handler(self, data):
+        message_types = ['text', 'login']
+        message = Message.from_binary(data)
+        if message.m_type not in message_types:
+            raise AttributeError
+        elif message.m_type == 'text':
+            print(message.content)
+        elif message.m_type == 'login':
+            if message.from_user == 'server':
+                self._login = True
 
     async def _command_handler(self, msg: str):
         com = msg.split(' ', maxsplit=1)
@@ -213,11 +231,21 @@ class Client:
         else:
             print(f"Can't find this command: {com[0]}")
 
+    async def _check_login_status(self):
+        ts = time()
+        while (not self._login) and (time() - ts < LOGIN_TIMEOUT):
+            await asyncio.sleep(1)
+        return self.login() and (time() - ts < LOGIN_TIMEOUT)
+
     async def sender(self):
+        login_check = await self._check_login_status()
+        if not login_check:
+            self.close_con()
+            raise ConnectionAbortedError
         session = PromptSession(message='> ', completer=self._prompt_completer, complete_in_thread=True,
                                 auto_suggest=AutoSuggestFromHistory(), refresh_interval=0.5,
                                 complete_while_typing=True,
-                                bottom_toolbar=self.get_bottom)  # refresh_interval=0.5,bottom_toolbar=self.get_bottom
+                                bottom_toolbar=self.get_bottom_toolbar)  # refresh_interval=0.5,bottom_toolbar=self.get_bottom
         with patch_stdout():
             message = await session.prompt_async()
         while message != '/e':
@@ -241,8 +269,44 @@ class Client:
         await self._send_msg(message.encode('utf-8'))
         self.close_con()
 
-    def get_bottom(self):
+    def login_win(self):
+        have_acc = input('Do you have an account? [Y/N]')
+        while have_acc not in ('Y', 'N'):
+            have_acc = input('please write Y or N \n Do you have an account? [Y/N]')
+        if have_acc == 'Y':
+            self.login()
+        else:
+            self.signin()
+        if not self._login_data:
+            raise AttributeError
+        asyncio.ensure_future(self._send_json_message(message=self._login_data))
+
+    def login(self):
+        login = input('LOGIN >')
+        password = input('PASSWORD >')
+        self._login_data = Message(m_type='login', login=login, password=password)
+
+    def signin(self):
+        nickname = input('NICKNAME >')
+        login = input('LOGIN >')
+        password = input('PASSWORD >')
+        conf_password = input('CONFORM PASSWORD >')
+        while password != conf_password:
+            print('You write different passwords :( \n Try again')
+            password = input('PASSWORD >')
+            conf_password = input('CONFORM PASSWORD >')
+        self._login_data = Message(m_type='singin', nickname=nickname, login=login, password=password)
+
+    def get_bottom_toolbar(self):
         return self._progress.get_progress()
+
+    async def _send_json_message(self, text: str = '', message: Message = None):
+        if text and message:
+            raise Exception  # todo: create exceptions
+        if text:
+            message = Message(m_type='text', m_content=text)
+        message.from_user = (self._ip, self._port)
+        self.sock.send(message.to_binary())
 
     async def _send_msg(self, message: bytes):
         try:

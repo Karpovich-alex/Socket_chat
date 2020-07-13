@@ -14,11 +14,12 @@ from typing import Tuple
 import time
 
 
-
-
 class DataBaseCreator:
 
     def __init__(self):
+        """
+        Create tables
+        """
         metadata = sa.MetaData()
         self.Users = sa.Table('users', metadata,
                               Column('id', Integer, primary_key=True, autoincrement=True),
@@ -62,15 +63,14 @@ class DataBaseCreator:
 
     def create_connection(self, func):
         """
-        Decorator which helps work with db
+        Decorator which helps work with db connection
         :param func:
         :return:
         """
         async def inner_decor(*args, **kwargs):
             async with self.engine.acquire() as conn:
                 try:
-                    print(kwargs['login'])
-                    return await func(args[0], conn, args[1:], **kwargs)
+                    return await func(args[0], conn, **kwargs)
                 except Exception as e:
                     print(e)
                     return 0
@@ -176,6 +176,7 @@ class DataBaseConnection:
             # .where(self.Users.c.id == 1)):
             print(res.id, res.login, res.password)
         print('Complete')
+
 
 def main():
     loop = asyncio.get_event_loop()
