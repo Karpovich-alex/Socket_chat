@@ -6,7 +6,7 @@ logger = logging.getLogger("tools.logger_example.server")
 
 class AbstractServer:
     def __init__(self, *args, **kwargs):
-       raise NotImplementedError
+        raise NotImplementedError
 
     async def _handle_connection(self, *args, **kwargs):
         raise NotImplementedError

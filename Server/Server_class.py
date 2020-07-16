@@ -7,6 +7,7 @@ import traceback
 from tools.commands import CommandARCH, Command
 from Server.Server_chat import AbstractServer
 from Server.Model import DataBaseConnection
+from tools.message.message import Message, DataContainer
 # todo: command_handler
 # todo: user login timeout
 # todo: command server class
@@ -21,8 +22,7 @@ class ChatServer(AbstractServer):
         self._port_server_file = port_files
         self._user_db: UserDB = UserDB()
         self._data_base = DataBaseConnection()
-        # self._commands_users = {'/e': self._u_exit, '/i': self._u_info, '/n': self._u_set_name,
-        #                         '/f': self._recieve_file, '/d': self._u_send_file}
+
         # todo: new description
         self._description = '''
         Hi there. This is the Socket Chat
@@ -33,8 +33,10 @@ class ChatServer(AbstractServer):
         self._last_file = '/img 25405 cat.jpg'
         self._set_commands()
 
-
     def _set_commands(self):
+        """
+        Helps Server handle messages and assign data_type with function
+        """
         with CommandARCH('Users') as self._user_commands:
             self._user_commands.add_command(
                 Command('exit user', '/e', self._u_exit, description="Exit from server", scope='Server'))
@@ -132,6 +134,7 @@ class ChatServer(AbstractServer):
         :return:
         """
         logger.info(f"User {addr} has connected")
+        data = await reader.read(1024)
         await self._data_base.add_user(login=str(addr[0] + ' '+str(addr[1])), password='')
         await self.send_msg("{} : User {} has connected".format('{}', addr), m_type='notice')
         await asyncio.sleep(0.1)
@@ -141,6 +144,10 @@ class ChatServer(AbstractServer):
         await self.send_msg(
             self._description.format(self._user_db.get_num_users()),
             to_user=addr, m_type='notice')
+
+    # todo: message verification
+    async def _message_handler(self, data):
+        message = DataContainer.from_binary(data)
 
     async def _user_commands_handler(self, command: str, addr: Tuple):
         """

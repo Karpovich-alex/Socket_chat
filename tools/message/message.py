@@ -27,6 +27,7 @@ class DataContainer:
     def data_type(self, val):
         self._data_types: Tuple = self._data_types + (val,)
 
+    # TODO: add parsing DataContainer class in vars
     def dump_to_json(self):
         return json.dumps(self.__dict__)
 
@@ -48,18 +49,23 @@ class DataContainer:
         return cls.load_from_json(simple_json)
 
 
-class Message(DataContainer):
+class MessageContainer(DataContainer):
     """
     A message instance which helps to communicate client with server
     """
 
+    def __init__(self, from_user=None, to_user=None, data_type=None, **kwargs):
+        super().__init__(data_type='message', from_user=from_user, to_user=to_user, **kwargs)
+        self.data_type = data_type
+
+
+class Message(MessageContainer):
     def __init__(self, from_user=None, to_user=None, message_type=None, message_text=None,
-                 **kwargs):
-        super().__init__(data_type='message', from_user=from_user, to_user=to_user)
+                 message_attachment: MessageContainer = None, **kwargs):
+        super().__init__(data_type='text', to_user=to_user, from_user=from_user, **kwargs)
         self.message_type = message_type
         self.message_text = message_text
-        for name, value in kwargs.items():
-            self.__setattr__(name, value)
+        self.message_attachment = message_attachment
 
 
 class ServiceDataContainer(DataContainer):
@@ -99,3 +105,5 @@ if __name__ == "__main__":
     json_data = (
         '{"m_type": "text", "from_user": "alex", "to_user": "lol", "content": "Hi there", "m_created_time": 1593537484.939852, "kwarg": "lolesh"}')
     print(Message.load_from_json(json_data).dump_to_json())
+    print()
+    print(LoginData(login='Joshuan', password='Jon20012202').dump_to_json())

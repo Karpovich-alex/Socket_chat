@@ -2,41 +2,29 @@ from typing import Callable, Tuple
 
 
 class Command:
-    def __init__(self, name: str, com: str, *actions: Callable, description: str = "", scope: str = 'Client',
-                 sub_command: Tuple = (), completer=None):
+    def __init__(self, name: str, com: str, *actions: Callable, description: str = "", sub_commands: Tuple = (), **kwargs):
+        """
+        helps work with commands
+        :param name: Name of this handler
+        :param com: Command
+        :param actions: Functions which should do if we accept this command
+        :param description: Description of this command
+        :param sub_commands: Sub commands
+        :param kwargs:
+        """
         self._name = name
         self._com = com
         self._actions = actions or []
         self._description = description
-        self._scope = scope
-        self._sub_command = sub_command
-        self._completer = completer
-        if self._sub_command and completer:
-            for sub_com in self._sub_command:
-                sub_com.set_completer(completer)
+        self._sub_commands = sub_commands
 
     def __repr__(self):
         out = f"{self._com} - {self._description if self._description else self._name}"
         sub_out = ''
-        if self._sub_command:
+        if self._sub_commands:
             sub_out = ':\n'
-            sub_out += '\n'.join(map(lambda x: "\t" + str(x), self._sub_command))
+            sub_out += '\n'.join(map(lambda x: "\t" + str(x), self._sub_commands))
         return out + sub_out
-
-    def set_completer(self, compl):
-        if not self._completer:
-            self._completer = compl
-        else:
-            raise ValueError('Can\'t assign one command with two completers')
-
-    def get_completer(self):
-        sub_dict = dict()
-        if self._sub_command:
-            for sub_com in self._sub_command:
-                sub_dict.update(sub_com.get_completer())
-            return {self._com: (self._description, sub_dict)}
-        else:
-            return {self._com: (self._description, self._completer)}
 
     async def _do_com(self, *args, **kwargs):
         for func in self._actions:
@@ -44,9 +32,6 @@ class Command:
 
     def get_com(self):
         return self._com
-
-    def get_scope(self):
-        return self._scope
 
     def get_name(self):
         return self._name
@@ -59,10 +44,41 @@ class Command:
         return await self._do_com(*args, **kwargs)
 
 
+class CommandWithScope(Command):
+    def __init__(self, name: str, com: str, *actions: Callable, description: str = "", scope: str = 'Client',
+                 sub_commands: Tuple = (), completer=None):
+        super().__init__(name=name, com=com, actions=actions, description=description, sub_commands=sub_commands)
+        self._scope = scope
+        self._completer = completer
+        if self._sub_commands and completer:
+            for sub_com in self._sub_commands:
+                sub_com.set_completer(completer)
+
+    # todo: make completer with property
+    def set_completer(self, compl):
+        if not self._completer:
+            self._completer = compl
+        else:
+            raise ValueError('Can\'t assign one command with two completers')
+
+    def get_completer(self):
+        sub_dict = dict()
+        if self._sub_commands:
+            for sub_com in self._sub_commands:
+                sub_dict.update(sub_com.get_completer())
+            return {self._com: (self._description, sub_dict)}
+        else:
+            return {self._com: (self._description, self._completer)}
+
+    def get_scope(self):
+        return self._scope
+
+
 class CommandARCH:
     def __init__(self, name, recovery=None):
         self.name = name
         if recovery:
+            # todo: make recovery function
             pass
         else:
             self._allcom_db = dict()
@@ -113,7 +129,7 @@ class CommandARCH:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.info = self._get_info()
 
-    # todo: Fix this iter(
+    # todo: Fix this iter
     def __iter__(self):
         return (com_cls for com_cls in self._allcom_db.values())
 
@@ -135,7 +151,7 @@ if __name__ == '__main__':
         print(kwargs)
 
 
-    def super(*args, **kwargs):
+    def calc(*args, **kwargs):
         return 2 + 1
 
 
@@ -146,7 +162,7 @@ if __name__ == '__main__':
     with CommandARCH('Test') as arch2:
         new_c = Command('helper', '/h', helper, com_1, description='Don\'t know')
         arch2.add_command(new_c)
-        arch2.add_command(Command('Super_command', '/super', super, description='Just 2+1'))
+        arch2.add_command(Command('Super_command', '/calc', calc, description='Just 2+1'))
     print(arch2.info)
     print(arch2)
     print(arch2.get_completer())
